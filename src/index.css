@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-athena-purple: #2D1B69;
+  --color-athena-purple-light: #3B2585;
+  --color-athena-purple-dark: #1A0F3D;
+  --color-athena-purple-nav: rgba(255, 255, 255, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f8f9fa;
+}
+
+#root {
+  min-height: 100vh;
+}
