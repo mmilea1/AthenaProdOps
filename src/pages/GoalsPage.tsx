@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   useGoals,
   isGoalMet,
@@ -8,12 +8,21 @@ import {
   daysLeft,
   GOAL_DAYS,
   type ScopingFeature,
+  type GoalsScope,
 } from '../hooks/useGoals'
 
 const STORAGE_KEY = 'goalsTrackingSince'
+const SCOPE_KEY = 'goalsScope'
 
 function getStoredDate(): string {
   return localStorage.getItem(STORAGE_KEY) ?? new Date().toISOString().split('T')[0]
+}
+
+function getStoredScope(): GoalsScope | null {
+  try {
+    const raw = localStorage.getItem(SCOPE_KEY)
+    return raw ? (JSON.parse(raw) as GoalsScope) : null
+  } catch { return null }
 }
 
 type SortField = 'release' | 'created' | 'daysTaken' | 'scopingStatus' | 'goal' | null
@@ -276,6 +285,77 @@ const GOAL_TABS = [
 ] as const
 type GoalTab = typeof GOAL_TABS[number]['id']
 
+function ScopeConfigurator({
+  scope, onSave,
+}: {
+  scope: GoalsScope | null
+  onSave: (s: GoalsScope) => void
+}) {
+  const [products, setProducts] = useState<string[]>([])
+  const [zones, setZones] = useState<string[]>([])
+  const [selProduct, setSelProduct] = useState(scope?.product ?? '')
+  const [selZone, setSelZone] = useState(scope?.zone ?? '')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/goals/scope-options')
+      .then(r => r.json() as Promise<{ products: string[]; zones: string[] }>)
+      .then(d => { setProducts(d.products); setZones(d.zones) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <div className="bg-white rounded-lg border border-indigo-200 p-6 mb-6">
+      <div className="flex items-start gap-3 mb-5">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: '#2D1B69' }}>
+          <span className="text-white text-sm">⚙</span>
+        </div>
+        <div>
+          <div className="font-semibold text-gray-900">Configure your monitoring scope</div>
+          <div className="text-sm text-gray-500 mt-0.5">
+            Select the Product and Zone you're responsible for. The Goals tracker will monitor all features in that scope.
+          </div>
+        </div>
+      </div>
+      <div className="flex items-end gap-3 flex-wrap">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Product</label>
+          <select
+            value={selProduct}
+            onChange={e => setSelProduct(e.target.value)}
+            disabled={loading}
+            className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 min-w-[220px] disabled:opacity-50"
+          >
+            <option value="">{loading ? 'Loading...' : 'Select a product'}</option>
+            {products.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Zone</label>
+          <select
+            value={selZone}
+            onChange={e => setSelZone(e.target.value)}
+            disabled={loading}
+            className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 min-w-[220px] disabled:opacity-50"
+          >
+            <option value="">{loading ? 'Loading...' : 'Select a zone'}</option>
+            {zones.map(z => <option key={z} value={z}>{z}</option>)}
+          </select>
+        </div>
+        <button
+          onClick={() => { if (selProduct || selZone) onSave({ product: selProduct, zone: selZone }) }}
+          disabled={!selProduct && !selZone}
+          className="px-4 py-2 rounded-md text-sm font-medium text-white transition-colors disabled:opacity-40"
+          style={{ backgroundColor: '#2D1B69' }}
+        >
+          Save scope
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function GoalsPage() {
   const [activeTab, setActiveTab] = useState<GoalTab>('scoping')
   const [showDemo, setShowDemo] = useState(false)
@@ -283,10 +363,16 @@ export function GoalsPage() {
   const [trackingSince, setTrackingSince] = useState(getStoredDate)
   const [editingDate, setEditingDate] = useState(false)
   const [dateInput, setDateInput] = useState(getStoredDate)
-  const [filterProduct, setFilterProduct] = useState('')
-  const [filterZone, setFilterZone] = useState('')
+  const [scope, setScope] = useState<GoalsScope | null>(getStoredScope)
+  const [configuringScope, setConfiguringScope] = useState(false)
 
-  const { features, loading, error, refresh } = useGoals(showDemo, trackingSince)
+  function saveScope(s: GoalsScope) {
+    localStorage.setItem(SCOPE_KEY, JSON.stringify(s))
+    setScope(s)
+    setConfiguringScope(false)
+  }
+
+  const { features, loading, error, refresh } = useGoals(showDemo, trackingSince, scope)
 
   const newFeatures = useMemo(
     () => features.filter((f) => f.created >= trackingSince),
@@ -297,25 +383,7 @@ export function GoalsPage() {
     [features, trackingSince]
   )
 
-  const baseFeatures = view === 'new' ? newFeatures : historicFeatures
-
-  const productOptions = useMemo(
-    () => [...new Set(features.map((f) => f.product).filter(Boolean) as string[])].sort(),
-    [features]
-  )
-  const zoneOptions = useMemo(
-    () => [...new Set(features.map((f) => f.zone).filter(Boolean) as string[])].sort(),
-    [features]
-  )
-
-  const activeFeatures = useMemo(
-    () => baseFeatures.filter((f) => {
-      if (filterProduct && f.product !== filterProduct) return false
-      if (filterZone && f.zone !== filterZone) return false
-      return true
-    }),
-    [baseFeatures, filterProduct, filterZone]
-  )
+  const activeFeatures = view === 'new' ? newFeatures : historicFeatures
 
   const lastUpdated = new Date().toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
@@ -359,6 +427,28 @@ export function GoalsPage() {
         )}
       </div>
 
+      {/* Scope banner */}
+      {activeTab === 'scoping' && (
+        <>
+          {(!scope || configuringScope) ? (
+            <ScopeConfigurator scope={scope} onSave={saveScope} />
+          ) : (
+            <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-3 mb-6">
+              <span className="text-indigo-400 text-sm">◎</span>
+              <span className="text-sm text-gray-600">Monitoring</span>
+              <span className="text-sm font-semibold text-gray-900">{scope.product || 'All Products'}</span>
+              {scope.zone && <><span className="text-gray-300">·</span><span className="text-sm font-semibold text-gray-900">{scope.zone}</span></>}
+              <button
+                onClick={() => setConfiguringScope(true)}
+                className="ml-auto text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                Change
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
       {/* Goal tabs */}
       <div className="flex items-center gap-1 border-b border-gray-200 mb-6">
         {GOAL_TABS.map((tab) => (
@@ -394,7 +484,7 @@ export function GoalsPage() {
             <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold ${
               view === 'new' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
             }`}>
-              {view === 'new' ? activeFeatures.length : newFeatures.filter(f => (!filterProduct || f.product === filterProduct) && (!filterZone || f.zone === filterZone)).length}
+              {newFeatures.length}
             </span>
           </button>
           <button
@@ -408,7 +498,7 @@ export function GoalsPage() {
             <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold ${
               view === 'historic' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
             }`}>
-              {view === 'historic' ? activeFeatures.length : historicFeatures.filter(f => (!filterProduct || f.product === filterProduct) && (!filterZone || f.zone === filterZone)).length}
+              {historicFeatures.length}
             </span>
           </button>
         </div>
@@ -437,36 +527,6 @@ export function GoalsPage() {
           )}
         </div>
 
-        {/* Product filter */}
-        <select
-          value={filterProduct}
-          onChange={(e) => setFilterProduct(e.target.value)}
-          disabled={productOptions.length === 0}
-          className="text-xs border border-gray-200 rounded-md px-2.5 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-400 hover:border-gray-300 disabled:opacity-40 disabled:cursor-default"
-        >
-          <option value="">All Products</option>
-          {productOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-
-        {/* Zone filter */}
-        <select
-          value={filterZone}
-          onChange={(e) => setFilterZone(e.target.value)}
-          disabled={zoneOptions.length === 0}
-          className="text-xs border border-gray-200 rounded-md px-2.5 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-400 hover:border-gray-300 disabled:opacity-40 disabled:cursor-default"
-        >
-          <option value="">All Zones</option>
-          {zoneOptions.map((z) => <option key={z} value={z}>{z}</option>)}
-        </select>
-
-        {(filterProduct || filterZone) && (
-          <button
-            onClick={() => { setFilterProduct(''); setFilterZone('') }}
-            className="text-xs text-gray-400 hover:text-gray-600"
-          >
-            Clear filters
-          </button>
-        )}
       </div>
 
       {loading && (

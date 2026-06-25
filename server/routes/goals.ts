@@ -7,7 +7,7 @@ const FIELD_SCOPING_STATUS = 'customfield_22800'  // Product Operations Scoping 
 const FIELD_RELEASE        = 'customfield_16006'  // Target GA Release
 const FIELD_PRODUCT        = 'customfield_28102'  // Product (Insight object)
 const FIELD_ZONE           = 'customfield_28103'  // Zone (Insight object, multi)
-const FIELD_PROD_OPS_NUM   = '17211'              // cf[] number for JQL
+const FIELD_PROD_OPS_NUM   = '17211'
 
 const FIELDS = [
   'summary',
@@ -19,14 +19,12 @@ const FIELDS = [
   FIELD_ZONE,
 ]
 
-// Scoping statuses that count as "done" for the goal
 const SCOPED_DONE = new Set([
   'Scoped-Supported',
   'Scoped-Not Supported',
   'Deferred Scoping',
 ])
 
-// Returns business days (Mon–Fri) between two dates
 export function businessDaysBetween(from: Date, to: Date): number {
   let count = 0
   const cur = new Date(from)
@@ -51,10 +49,8 @@ interface ChangelogHistory {
   items: ChangelogItem[]
 }
 
-// Find the earliest date when the scoping status was set to a "done" value
 function scopingCompletedAt(changelog: { histories: ChangelogHistory[] } | undefined): Date | null {
   if (!changelog?.histories) return null
-
   let earliest: Date | null = null
   for (const history of changelog.histories) {
     for (const item of history.items) {
@@ -76,8 +72,8 @@ export interface ScopingFeature {
   summary: string
   url: string
   created: string
-  scopedAt: string | null       // when scoping status was set to a done value (null = not yet)
-  businessDaysTaken: number     // days from created → scopedAt (or today if not done)
+  scopedAt: string | null
+  businessDaysTaken: number
   scopingStatus: string | null
   targetRelease: string | null
   product: string | null
@@ -90,34 +86,61 @@ function insightLabel(raw: unknown): string | null {
   if (!raw) return null
   const val = Array.isArray(raw) ? (raw[0] as string) : (raw as string)
   if (typeof val !== 'string') return null
-  // Strip trailing " (PZ-XXXX)" identifier
   return val.replace(/\s*\([A-Z]+-\d+\)\s*$/, '').trim() || null
 }
 
-const DEMO_FEATURE: ScopingFeature = {
-  id: 'demo-99999',
-  key: 'FEATURE-99999',
-  summary: '[DEMO] New SSO integration for partner portal',
-  url: '#',
-  created: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-  scopedAt: null,
-  businessDaysTaken: 8,
-  scopingStatus: null,
-  targetRelease: '26.11',
-  isDemo: true,
-}
+// Cache scope options for 1 hour
+let scopeCache: { data: { products: string[]; zones: string[] }; fetchedAt: number } | null = null
 
+router.get('/goals/scope-options', async (_req, res) => {
+  if (scopeCache && Date.now() - scopeCache.fetchedAt < 60 * 60 * 1000) {
+    return res.json(scopeCache.data)
+  }
+  try {
+    const issues = await jiraSearch(
+      'project = FEATURE AND created >= "2023-01-01" ORDER BY created DESC',
+      [FIELD_PRODUCT, FIELD_ZONE],
+      300
+    )
+    const products = new Set<string>()
+    const zones = new Set<string>()
+    for (const issue of issues) {
+      const f = issue.fields as Record<string, unknown>
+      const p = insightLabel(f[FIELD_PRODUCT])
+      const z = insightLabel(f[FIELD_ZONE])
+      if (p) products.add(p)
+      if (z) zones.add(z)
+    }
+    const data = {
+      products: [...products].sort(),
+      zones: [...zones].sort(),
+    }
+    scopeCache = { data, fetchedAt: Date.now() }
+    res.json(data)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    res.status(500).json({ error: message })
+  }
+})
 
 router.get('/goals/scoping', async (req, res) => {
   const showDemo = req.query.showDemo === 'true'
+  const scopeProduct = req.query.product as string | undefined
+  const scopeZone = req.query.zone as string | undefined
+
+  // Build JQL based on scope
+  let jql: string
+  if (scopeProduct || scopeZone) {
+    const clauses = ['project = FEATURE', 'created >= "2023-01-01"']
+    if (scopeProduct) clauses.push(`"Product" = "${scopeProduct}"`)
+    if (scopeZone) clauses.push(`"Zone" = "${scopeZone}"`)
+    jql = clauses.join(' AND ') + ' ORDER BY created DESC'
+  } else {
+    jql = `cf[${FIELD_PROD_OPS_NUM}] = currentUser() ORDER BY created DESC`
+  }
 
   try {
-    const raw = await jiraSearch(
-      `cf[${FIELD_PROD_OPS_NUM}] = currentUser() ORDER BY created DESC`,
-      FIELDS,
-      undefined,
-      ['changelog']
-    )
+    const raw = await jiraSearch(jql, FIELDS, undefined, ['changelog'])
     const now = new Date()
 
     const features: ScopingFeature[] = raw.map((issue) => {
@@ -127,8 +150,8 @@ router.get('/goals/scoping', async (req, res) => {
       const created = (f.created as string) ?? new Date().toISOString()
       const scopingField = f[FIELD_SCOPING_STATUS] as { value?: string } | null
       const releaseField = f[FIELD_RELEASE] as { value?: string } | null
-      const releaseRaw = releaseField?.value ?? null
       const scopingStatus = scopingField?.value ?? null
+      const releaseRaw = releaseField?.value ?? null
 
       const completedAt = scopingCompletedAt(changelog)
       const endDate = completedAt ?? now
@@ -148,12 +171,22 @@ router.get('/goals/scoping', async (req, res) => {
       }
     })
 
-    if (showDemo) features.unshift(DEMO_FEATURE)
+    if (showDemo) features.unshift({
+      id: 'demo-99999', key: 'FEATURE-99999',
+      summary: '[DEMO] New SSO integration for partner portal',
+      url: '#',
+      created: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      scopedAt: null, businessDaysTaken: 2, scopingStatus: null,
+      targetRelease: '26.11',
+      product: scopeProduct ?? 'Data and Ecosystem Platform',
+      zone: scopeZone ?? 'Identity and Access Management',
+      isDemo: true,
+    })
 
     res.json(features)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    if (showDemo) return res.json([DEMO_FEATURE])
+    if (showDemo) return res.json([])
     res.status(500).json({ error: message })
   }
 })

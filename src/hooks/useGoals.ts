@@ -6,8 +6,8 @@ export interface ScopingFeature {
   summary: string
   url: string
   created: string
-  scopedAt: string | null        // ISO date when scoping status was set to a done value
-  businessDaysTaken: number      // created → scopedAt (or today if not done)
+  scopedAt: string | null
+  businessDaysTaken: number
   scopingStatus: string | null
   targetRelease: string | null
   product: string | null
@@ -15,9 +15,13 @@ export interface ScopingFeature {
   isDemo?: boolean
 }
 
+export interface GoalsScope {
+  product: string
+  zone: string
+}
+
 export const GOAL_DAYS = 14
 
-// Statuses that satisfy the scoping goal
 const SCOPED_STATUSES = new Set([
   'Scoped-Supported',
   'Scoped-Not Supported',
@@ -29,22 +33,18 @@ export function isScopingComplete(status: string | null): boolean {
   return !!status && SCOPED_STATUSES.has(status)
 }
 
-// Goal is met only if scoped AND completed within 14 business days
 export function isGoalMet(f: ScopingFeature): boolean {
   return isScopingComplete(f.scopingStatus) && f.businessDaysTaken <= GOAL_DAYS
 }
 
-// Scoped but took too long
 export function isGoalMissed(f: ScopingFeature): boolean {
   return isScopingComplete(f.scopingStatus) && f.businessDaysTaken > GOAL_DAYS
 }
 
-// Not yet scoped, still within the window — needs action soon
 export function needsAttention(f: ScopingFeature): boolean {
   return !isScopingComplete(f.scopingStatus) && f.businessDaysTaken < GOAL_DAYS
 }
 
-// Not yet scoped and already past 14 days — overdue
 export function isLate(f: ScopingFeature): boolean {
   return !isScopingComplete(f.scopingStatus) && f.businessDaysTaken >= GOAL_DAYS
 }
@@ -53,8 +53,7 @@ export function daysLeft(f: ScopingFeature): number {
   return GOAL_DAYS - f.businessDaysTaken
 }
 
-// Demo feature created 2 days after trackingSince so it always lands in "New Features"
-function makeDemoFeature(trackingSince: string): ScopingFeature {
+function makeDemoFeature(trackingSince: string, scope: GoalsScope | null): ScopingFeature {
   const base = new Date(trackingSince)
   base.setDate(base.getDate() + 1)
   return {
@@ -67,8 +66,8 @@ function makeDemoFeature(trackingSince: string): ScopingFeature {
     businessDaysTaken: 2,
     scopingStatus: null,
     targetRelease: '26.11',
-    product: 'Data and Ecosystem Platform',
-    zone: 'Identity and Access Management',
+    product: scope?.product ?? 'Data and Ecosystem Platform',
+    zone: scope?.zone ?? 'Identity and Access Management',
     isDemo: true,
   }
 }
@@ -79,7 +78,7 @@ type State =
   | { status: 'success'; features: ScopingFeature[] }
   | { status: 'error'; message: string; features: ScopingFeature[] }
 
-export function useGoals(showDemo: boolean, trackingSince: string) {
+export function useGoals(showDemo: boolean, trackingSince: string, scope: GoalsScope | null) {
   const [state, setState] = useState<State>({ status: 'idle' })
   const [tick, setTick] = useState(0)
 
@@ -89,8 +88,11 @@ export function useGoals(showDemo: boolean, trackingSince: string) {
     let cancelled = false
     setState({ status: 'loading' })
 
-    const demoFeature = makeDemoFeature(trackingSince)
+    const demoFeature = makeDemoFeature(trackingSince, scope)
     const params = new URLSearchParams({ showDemo: String(showDemo) })
+    if (scope?.product) params.set('product', scope.product)
+    if (scope?.zone) params.set('zone', scope.zone)
+
     fetch(`/api/goals/scoping?${params}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -98,8 +100,6 @@ export function useGoals(showDemo: boolean, trackingSince: string) {
       })
       .then((features) => {
         if (!cancelled) {
-          // Server already injects demo; replace it with the client-generated one
-          // that has the correct created date relative to trackingSince
           const withoutServerDemo = features.filter((f) => !f.isDemo)
           setState({ status: 'success', features: showDemo ? [demoFeature, ...withoutServerDemo] : withoutServerDemo })
         }
@@ -112,7 +112,7 @@ export function useGoals(showDemo: boolean, trackingSince: string) {
       })
 
     return () => { cancelled = true }
-  }, [showDemo, trackingSince, tick])
+  }, [showDemo, trackingSince, scope?.product, scope?.zone, tick])
 
   return {
     features: state.status === 'success' ? state.features : state.status === 'error' ? state.features : [],
