@@ -6,10 +6,9 @@ import { fileURLToPath } from 'url'
 const router = Router()
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ENV_PATH = join(__dirname, '../../.env')
-const ENV_EXAMPLE_PATH = join(__dirname, '../../.env.example')
 
 function readEnv(): Record<string, string> {
-  const source = existsSync(ENV_PATH) ? ENV_PATH : ENV_EXAMPLE_PATH
+  const source = ENV_PATH
   const lines = readFileSync(source, 'utf8').split('\n')
   const result: Record<string, string> = {}
   for (const line of lines) {
