@@ -3,6 +3,7 @@ import { Header } from './components/Header'
 import { FeaturesPage } from './pages/FeaturesPage'
 import { CalendarPage } from './pages/CalendarPage'
 import { GoalsPage } from './pages/GoalsPage'
+import { FlagsPage } from './pages/FlagsPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
             <Route path="/features" element={<FeaturesPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/goals" element={<GoalsPage />} />
+            <Route path="/flags" element={<FlagsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

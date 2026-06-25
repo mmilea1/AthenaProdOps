@@ -51,18 +51,22 @@ export function daysLeft(f: ScopingFeature): number {
   return GOAL_DAYS - f.businessDaysTaken
 }
 
-// Client-side demo feature shown when showDemo=true and the API is unavailable
-const DEMO_FEATURE: ScopingFeature = {
-  id: 'demo-99999',
-  key: 'FEATURE-99999',
-  summary: '[DEMO] New SSO integration for partner portal',
-  url: '#',
-  created: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-  scopedAt: null,
-  businessDaysTaken: 8,
-  scopingStatus: null,
-  targetRelease: '26.11',
-  isDemo: true,
+// Demo feature created 2 days after trackingSince so it always lands in "New Features"
+function makeDemoFeature(trackingSince: string): ScopingFeature {
+  const base = new Date(trackingSince)
+  base.setDate(base.getDate() + 1)
+  return {
+    id: 'demo-99999',
+    key: 'FEATURE-99999',
+    summary: '[DEMO] New SSO integration for partner portal',
+    url: '#',
+    created: base.toISOString(),
+    scopedAt: null,
+    businessDaysTaken: 2,
+    scopingStatus: null,
+    targetRelease: '26.11',
+    isDemo: true,
+  }
 }
 
 type State =
@@ -71,7 +75,7 @@ type State =
   | { status: 'success'; features: ScopingFeature[] }
   | { status: 'error'; message: string; features: ScopingFeature[] }
 
-export function useGoals(showDemo: boolean) {
+export function useGoals(showDemo: boolean, trackingSince: string) {
   const [state, setState] = useState<State>({ status: 'idle' })
   const [tick, setTick] = useState(0)
 
@@ -81,6 +85,7 @@ export function useGoals(showDemo: boolean) {
     let cancelled = false
     setState({ status: 'loading' })
 
+    const demoFeature = makeDemoFeature(trackingSince)
     const params = new URLSearchParams({ showDemo: String(showDemo) })
     fetch(`/api/goals/scoping?${params}`)
       .then((r) => {
@@ -88,18 +93,22 @@ export function useGoals(showDemo: boolean) {
         return r.json() as Promise<ScopingFeature[]>
       })
       .then((features) => {
-        if (!cancelled) setState({ status: 'success', features })
+        if (!cancelled) {
+          // Server already injects demo; replace it with the client-generated one
+          // that has the correct created date relative to trackingSince
+          const withoutServerDemo = features.filter((f) => !f.isDemo)
+          setState({ status: 'success', features: showDemo ? [demoFeature, ...withoutServerDemo] : withoutServerDemo })
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : 'Unknown error'
-          // Fall back to client-side demo data so the UI is still usable
-          setState({ status: 'error', message, features: showDemo ? [DEMO_FEATURE] : [] })
+          setState({ status: 'error', message, features: showDemo ? [demoFeature] : [] })
         }
       })
 
     return () => { cancelled = true }
-  }, [showDemo, tick])
+  }, [showDemo, trackingSince, tick])
 
   return {
     features: state.status === 'success' ? state.features : state.status === 'error' ? state.features : [],

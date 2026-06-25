@@ -76,7 +76,7 @@ export function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-8 max-w-2xl mx-auto">
+      <div className="px-8 py-8 max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
         <div className="text-gray-400 text-sm">Loading...</div>
       </div>
@@ -84,7 +84,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="px-8 py-8 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
       <p className="text-sm text-gray-500 mb-8">
         Manage your Jira connection. Changes are saved to your local{' '}

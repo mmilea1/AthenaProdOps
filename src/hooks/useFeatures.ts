@@ -30,9 +30,18 @@ function groupByRelease(features: JiraFeature[], allReleases: string[]): Release
     }
   }
 
-  return Array.from(map.entries())
+  const sorted = Array.from(map.entries())
     .sort(([a], [b]) => sortReleases(a, b))
     .map(([releaseName, feats]) => ({ releaseName, features: feats }))
+
+  // Always include releases with assigned features.
+  // For empty releases, only show the next 3 upcoming ones.
+  let emptyCount = 0
+  return sorted.filter((group) => {
+    if (group.features.length > 0) return true
+    if (emptyCount < 3) { emptyCount++; return true }
+    return false
+  })
 }
 
 type State =

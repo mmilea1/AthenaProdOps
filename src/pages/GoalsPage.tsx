@@ -284,7 +284,7 @@ export function GoalsPage() {
   const [editingDate, setEditingDate] = useState(false)
   const [dateInput, setDateInput] = useState(getStoredDate)
 
-  const { features, loading, error, refresh } = useGoals(showDemo)
+  const { features, loading, error, refresh } = useGoals(showDemo, trackingSince)
 
   const newFeatures = useMemo(
     () => features.filter((f) => f.created >= trackingSince),
@@ -309,7 +309,7 @@ export function GoalsPage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="px-8 py-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>

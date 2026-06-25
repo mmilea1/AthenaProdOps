@@ -153,7 +153,7 @@ export function FeaturesPage() {
       : groups.filter((g) => g.releaseName === selectedRelease)
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="px-8 py-8 max-w-7xl mx-auto">
       {/* Page header */}
       <div className="flex items-start justify-between mb-6">
         <div>
