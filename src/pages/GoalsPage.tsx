@@ -372,15 +372,17 @@ export function GoalsPage() {
     setConfiguringScope(false)
   }
 
-  const { features, loading, error, refresh } = useGoals(showDemo, trackingSince, scope)
+  const { scopeFeatures, assignedFeatures, loading, error, refresh } = useGoals(showDemo, trackingSince, scope)
 
+  // New tab: scope-based features created on/after trackingSince
   const newFeatures = useMemo(
-    () => features.filter((f) => f.created >= trackingSince),
-    [features, trackingSince]
+    () => scopeFeatures.filter((f) => f.created >= trackingSince),
+    [scopeFeatures, trackingSince]
   )
+  // Historic tab: features assigned to the user created before trackingSince
   const historicFeatures = useMemo(
-    () => features.filter((f) => f.created < trackingSince),
-    [features, trackingSince]
+    () => assignedFeatures.filter((f) => f.created < trackingSince),
+    [assignedFeatures, trackingSince]
   )
 
   const activeFeatures = view === 'new' ? newFeatures : historicFeatures

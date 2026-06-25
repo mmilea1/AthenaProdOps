@@ -127,10 +127,14 @@ router.get('/goals/scoping', async (req, res) => {
   const showDemo = req.query.showDemo === 'true'
   const scopeProduct = req.query.product as string | undefined
   const scopeZone = req.query.zone as string | undefined
+  // source=assigned → always query by current user (for Historic tab)
+  // source=scope (or omitted) → query by product/zone scope when set
+  const source = (req.query.source as string | undefined) ?? 'scope'
 
-  // Build JQL based on scope
   let jql: string
-  if (scopeProduct || scopeZone) {
+  if (source === 'assigned') {
+    jql = `cf[${FIELD_PROD_OPS_NUM}] = currentUser() ORDER BY created DESC`
+  } else if (scopeProduct || scopeZone) {
     const clauses = ['project = FEATURE', 'created >= "2023-01-01"']
     if (scopeProduct) clauses.push(`"Product" = "${scopeProduct}"`)
     if (scopeZone) clauses.push(`"Zone" = "${scopeZone}"`)

@@ -72,11 +72,17 @@ function makeDemoFeature(trackingSince: string, scope: GoalsScope | null): Scopi
   }
 }
 
+async function fetchFeatures(params: URLSearchParams): Promise<ScopingFeature[]> {
+  const r = await fetch(`/api/goals/scoping?${params}`)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json() as Promise<ScopingFeature[]>
+}
+
 type State =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'success'; features: ScopingFeature[] }
-  | { status: 'error'; message: string; features: ScopingFeature[] }
+  | { status: 'success'; scopeFeatures: ScopingFeature[]; assignedFeatures: ScopingFeature[] }
+  | { status: 'error'; message: string; scopeFeatures: ScopingFeature[]; assignedFeatures: ScopingFeature[] }
 
 export function useGoals(showDemo: boolean, trackingSince: string, scope: GoalsScope | null) {
   const [state, setState] = useState<State>({ status: 'idle' })
@@ -89,33 +95,44 @@ export function useGoals(showDemo: boolean, trackingSince: string, scope: GoalsS
     setState({ status: 'loading' })
 
     const demoFeature = makeDemoFeature(trackingSince, scope)
-    const params = new URLSearchParams({ showDemo: String(showDemo) })
-    if (scope?.product) params.set('product', scope.product)
-    if (scope?.zone) params.set('zone', scope.zone)
 
-    fetch(`/api/goals/scoping?${params}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json() as Promise<ScopingFeature[]>
-      })
-      .then((features) => {
+    // Scope query (for New Features tab) — uses product/zone when set
+    const scopeParams = new URLSearchParams({ showDemo: 'false', source: 'scope' })
+    if (scope?.product) scopeParams.set('product', scope.product)
+    if (scope?.zone) scopeParams.set('zone', scope.zone)
+
+    // Assigned query (always used for Historic tab)
+    const assignedParams = new URLSearchParams({ showDemo: 'false', source: 'assigned' })
+
+    Promise.all([fetchFeatures(scopeParams), fetchFeatures(assignedParams)])
+      .then(([scopeFeatures, assignedFeatures]) => {
         if (!cancelled) {
-          const withoutServerDemo = features.filter((f) => !f.isDemo)
-          setState({ status: 'success', features: showDemo ? [demoFeature, ...withoutServerDemo] : withoutServerDemo })
+          const newFeatures = showDemo ? [demoFeature, ...scopeFeatures] : scopeFeatures
+          setState({ status: 'success', scopeFeatures: newFeatures, assignedFeatures })
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : 'Unknown error'
-          setState({ status: 'error', message, features: showDemo ? [demoFeature] : [] })
+          setState({
+            status: 'error', message,
+            scopeFeatures: showDemo ? [demoFeature] : [],
+            assignedFeatures: [],
+          })
         }
       })
 
     return () => { cancelled = true }
   }, [showDemo, trackingSince, scope?.product, scope?.zone, tick])
 
+  const scopeFeatures = state.status === 'success' ? state.scopeFeatures
+    : state.status === 'error' ? state.scopeFeatures : []
+  const assignedFeatures = state.status === 'success' ? state.assignedFeatures
+    : state.status === 'error' ? state.assignedFeatures : []
+
   return {
-    features: state.status === 'success' ? state.features : state.status === 'error' ? state.features : [],
+    scopeFeatures,
+    assignedFeatures,
     loading: state.status === 'loading' || state.status === 'idle',
     error: state.status === 'error' ? state.message : null,
     refresh,
