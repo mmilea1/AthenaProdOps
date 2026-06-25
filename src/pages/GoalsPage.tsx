@@ -283,6 +283,8 @@ export function GoalsPage() {
   const [trackingSince, setTrackingSince] = useState(getStoredDate)
   const [editingDate, setEditingDate] = useState(false)
   const [dateInput, setDateInput] = useState(getStoredDate)
+  const [filterProduct, setFilterProduct] = useState('')
+  const [filterZone, setFilterZone] = useState('')
 
   const { features, loading, error, refresh } = useGoals(showDemo, trackingSince)
 
@@ -295,7 +297,25 @@ export function GoalsPage() {
     [features, trackingSince]
   )
 
-  const activeFeatures = view === 'new' ? newFeatures : historicFeatures
+  const baseFeatures = view === 'new' ? newFeatures : historicFeatures
+
+  const productOptions = useMemo(
+    () => [...new Set(features.map((f) => f.product).filter(Boolean) as string[])].sort(),
+    [features]
+  )
+  const zoneOptions = useMemo(
+    () => [...new Set(features.map((f) => f.zone).filter(Boolean) as string[])].sort(),
+    [features]
+  )
+
+  const activeFeatures = useMemo(
+    () => baseFeatures.filter((f) => {
+      if (filterProduct && f.product !== filterProduct) return false
+      if (filterZone && f.zone !== filterZone) return false
+      return true
+    }),
+    [baseFeatures, filterProduct, filterZone]
+  )
 
   const lastUpdated = new Date().toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
@@ -359,8 +379,8 @@ export function GoalsPage() {
       {activeTab === 'fields' && <FieldCompletionGoal />}
       {activeTab === 'scoping' && (
         <>
-      {/* Tracking since + view toggle */}
-      <div className="flex items-center gap-4 mb-6">
+      {/* Tracking since + view toggle + filters */}
+      <div className="flex items-center gap-4 mb-6 flex-wrap">
         {/* New / Historic toggle */}
         <div className="flex items-center rounded-lg border border-gray-200 bg-white overflow-hidden">
           <button
@@ -374,7 +394,7 @@ export function GoalsPage() {
             <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold ${
               view === 'new' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
             }`}>
-              {newFeatures.length}
+              {view === 'new' ? activeFeatures.length : newFeatures.filter(f => (!filterProduct || f.product === filterProduct) && (!filterZone || f.zone === filterZone)).length}
             </span>
           </button>
           <button
@@ -388,7 +408,7 @@ export function GoalsPage() {
             <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold ${
               view === 'historic' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
             }`}>
-              {historicFeatures.length}
+              {view === 'historic' ? activeFeatures.length : historicFeatures.filter(f => (!filterProduct || f.product === filterProduct) && (!filterZone || f.zone === filterZone)).length}
             </span>
           </button>
         </div>
@@ -416,6 +436,37 @@ export function GoalsPage() {
             </button>
           )}
         </div>
+
+        {/* Product filter */}
+        <select
+          value={filterProduct}
+          onChange={(e) => setFilterProduct(e.target.value)}
+          disabled={productOptions.length === 0}
+          className="text-xs border border-gray-200 rounded-md px-2.5 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-400 hover:border-gray-300 disabled:opacity-40 disabled:cursor-default"
+        >
+          <option value="">All Products</option>
+          {productOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+
+        {/* Zone filter */}
+        <select
+          value={filterZone}
+          onChange={(e) => setFilterZone(e.target.value)}
+          disabled={zoneOptions.length === 0}
+          className="text-xs border border-gray-200 rounded-md px-2.5 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-400 hover:border-gray-300 disabled:opacity-40 disabled:cursor-default"
+        >
+          <option value="">All Zones</option>
+          {zoneOptions.map((z) => <option key={z} value={z}>{z}</option>)}
+        </select>
+
+        {(filterProduct || filterZone) && (
+          <button
+            onClick={() => { setFilterProduct(''); setFilterZone('') }}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {loading && (

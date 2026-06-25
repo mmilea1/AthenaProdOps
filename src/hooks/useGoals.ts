@@ -10,6 +10,8 @@ export interface ScopingFeature {
   businessDaysTaken: number      // created → scopedAt (or today if not done)
   scopingStatus: string | null
   targetRelease: string | null
+  product: string | null
+  zone: string | null
   isDemo?: boolean
 }
 
@@ -65,6 +67,8 @@ function makeDemoFeature(trackingSince: string): ScopingFeature {
     businessDaysTaken: 2,
     scopingStatus: null,
     targetRelease: '26.11',
+    product: 'Data and Ecosystem Platform',
+    zone: 'Identity and Access Management',
     isDemo: true,
   }
 }

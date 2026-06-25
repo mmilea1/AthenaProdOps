@@ -5,6 +5,8 @@ const router = Router()
 
 const FIELD_SCOPING_STATUS = 'customfield_22800'  // Product Operations Scoping Status
 const FIELD_RELEASE        = 'customfield_16006'  // Target GA Release
+const FIELD_PRODUCT        = 'customfield_28102'  // Product (Insight object)
+const FIELD_ZONE           = 'customfield_28103'  // Zone (Insight object, multi)
 const FIELD_PROD_OPS_NUM   = '17211'              // cf[] number for JQL
 
 const FIELDS = [
@@ -13,6 +15,8 @@ const FIELDS = [
   'status',
   FIELD_SCOPING_STATUS,
   FIELD_RELEASE,
+  FIELD_PRODUCT,
+  FIELD_ZONE,
 ]
 
 // Scoping statuses that count as "done" for the goal
@@ -76,7 +80,18 @@ export interface ScopingFeature {
   businessDaysTaken: number     // days from created → scopedAt (or today if not done)
   scopingStatus: string | null
   targetRelease: string | null
+  product: string | null
+  zone: string | null
   isDemo?: boolean
+}
+
+// Insight/Assets fields return string arrays like ["Data and Ecosystem Platform (PZ-401)"]
+function insightLabel(raw: unknown): string | null {
+  if (!raw) return null
+  const val = Array.isArray(raw) ? (raw[0] as string) : (raw as string)
+  if (typeof val !== 'string') return null
+  // Strip trailing " (PZ-XXXX)" identifier
+  return val.replace(/\s*\([A-Z]+-\d+\)\s*$/, '').trim() || null
 }
 
 const DEMO_FEATURE: ScopingFeature = {
@@ -91,6 +106,7 @@ const DEMO_FEATURE: ScopingFeature = {
   targetRelease: '26.11',
   isDemo: true,
 }
+
 
 router.get('/goals/scoping', async (req, res) => {
   const showDemo = req.query.showDemo === 'true'
@@ -127,6 +143,8 @@ router.get('/goals/scoping', async (req, res) => {
         businessDaysTaken: businessDaysBetween(new Date(created), endDate),
         scopingStatus,
         targetRelease: releaseRaw ? releaseRaw.replace(/\*/g, '').trim() : null,
+        product: insightLabel(f[FIELD_PRODUCT]),
+        zone: insightLabel(f[FIELD_ZONE]),
       }
     })
 
