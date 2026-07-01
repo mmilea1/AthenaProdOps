@@ -7,6 +7,7 @@ const router = Router()
 const FIELDS = [
   'summary',
   'status',
+  'assignee',
   'customfield_22800',
   'customfield_16006',
   'customfield_28300',
@@ -21,6 +22,7 @@ function transformIssue(raw: RawJiraIssue) {
   const statusField = fields.status as { name?: string; statusCategory?: { name?: string } } | null
   const scopingField = fields.customfield_22800 as { value?: string } | null
   const uncommittedField = fields.customfield_28300 as { value?: string } | null
+  const assigneeField = fields.assignee as { displayName?: string } | null
 
   return {
     id: raw.id,
@@ -33,6 +35,7 @@ function transformIssue(raw: RawJiraIssue) {
     scopingStatus: scopingField?.value ?? null,
     targetGARelease,
     uncommittedReview: uncommittedField?.value ?? null,
+    assignee: assigneeField?.displayName ?? null,
     url: getJiraIssueUrl(raw.key),
   }
 }

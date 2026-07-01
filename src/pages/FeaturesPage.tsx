@@ -65,10 +65,11 @@ function ReleaseSection({ group }: { group: ReleaseGroup }) {
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
           <table className="w-full text-sm table-fixed">
             <colgroup>
-              <col style={{ width: '58%' }} />
+              <col style={{ width: '46%' }} />
               <col style={{ width: '10%' }} />
               <col style={{ width: '12%' }} />
-              <col style={{ width: '20%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '18%' }} />
             </colgroup>
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50/80">
@@ -91,6 +92,7 @@ function ReleaseSection({ group }: { group: ReleaseGroup }) {
                   Status
                   <SortIcon active={sortField === 'status'} dir={sortDir} hovered={hoveredCol === 'status'} />
                 </th>
+                <th className={thBase}>PM</th>
                 <th
                   className={`${thBase} cursor-pointer`}
                   onClick={() => handleSort('scoping')}
@@ -128,6 +130,9 @@ function ReleaseSection({ group }: { group: ReleaseGroup }) {
                   </td>
                   <td className="px-4 py-4">
                     <StatusBadge name={feature.status.name} category={feature.status.category} />
+                  </td>
+                  <td className="px-4 py-4 text-gray-600 text-sm">
+                    {feature.assignee ?? <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-4">
                     <ScopingBadge value={feature.scopingStatus} />

@@ -9,6 +9,7 @@ export interface JiraFeature {
   scopingStatus: string | null
   targetGARelease: string | null
   uncommittedReview: string | null
+  assignee: string | null
   url: string
 }
 
